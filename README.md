@@ -24,7 +24,7 @@ https://user-images.githubusercontent.com/113930878/191446097-3a4ab3a3-6a65-4c05
 ## Where is the photoshop plugin?
  - It's here: https://github.com/viralesveras/sd-ps-plugin
 
-# Preequisites
+# Prerequisites
  - A machine running Ubuntu 20.04 or similar
  - A powerful NVIDIA GPU, like a 3090 or A6000 or better.
 
