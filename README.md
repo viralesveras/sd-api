@@ -3,7 +3,7 @@ A simple API providing a job queue for a local sd-webui instance
 
 # Demonstration video:
 
-
+https://user-images.githubusercontent.com/113930878/191446097-3a4ab3a3-6a65-4c05-a245-da149e75e30a.mp4
 
 # FAQ
 
