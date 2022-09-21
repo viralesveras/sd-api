@@ -1,0 +1,8 @@
+{
+    "models": [
+        {
+            "name": "stable_diffusion",
+            "path": "models/ldm/stable-diffusion-v1/model.ckpt"
+        }
+    ] 
+}
