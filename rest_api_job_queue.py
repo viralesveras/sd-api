@@ -39,7 +39,7 @@ loaded_model = None
 mixed_model = None
 previous_mix = None
 
-server_version = "0.0.1"
+server_version = "0.0.2"
 samplers = ["DDIM",
             "PLMS",
             "k_dpm_2_a",
@@ -54,7 +54,7 @@ def get_info():
 
 #Replace the currently loaded model (if any) with a new one.
 def load_model(m):
-    global webui_modified
+    global webui
     global loaded_model
     print(f'Loading model "{m["name"]}')
     try:
@@ -69,11 +69,12 @@ def load_model(m):
         sys.argv.append("--ckpt")
         sys.argv.append(m["path"])
 
-    if "webui_modified" not in sys.modules:
-        import webui_modified
+    if "webui" not in sys.modules:
+        import webui
     else:
-        importlib.reload(webui_modified)
+        importlib.reload(webui)
     loaded_model = m
+
 
 #Generate a mixed model
 #NOTE: This was generalized from a two-model mixing script
@@ -87,7 +88,40 @@ def generate_mixed_model(in_mix, path):
         mix = []
         models_to_mix = []
         theta = []
+
+        assert path not in [m["path"] for m in models], "Output path cannot be in input paths"
         assert len(in_mix) == len(models), "Wrong number of mix scalars"
+        assert len(in_mix) > 0, "Need at least one model to mix"
+
+        if os.path.isfile(path):
+            os.remove(path)
+
+        count = 0
+        for x in in_mix:
+            if x != 0:
+                count += 1
+
+        if count == 0:
+            in_mix[0] = 1
+            count = 1
+
+        if count == 1:
+            #No need to mix if there's only one. Just symlink it.
+            for i in range(0, len(models)):
+                if in_mix[i] != 0:
+                    break
+
+            print(f'No mix required. Using model {i}: {models[i]["name"]}')
+            os.symlink(models[i]["path"], path)
+            del torch
+            return
+
+        #Ensure the mix sums to 1
+        magnitude = sum([x for x in in_mix])
+        for i in range(0, len(in_mix)):
+            in_mix[i] /= magnitude
+
+
         j = 0
 
         for i in range(0, len(models)):
@@ -99,6 +133,15 @@ def generate_mixed_model(in_mix, path):
                 mix.append(in_mix[i])
                 j += 1
 
+        def isFloatingType(tensor):
+            return tensor.dtype in [
+                    torch.float, torch.float32, 
+                    torch.float64, torch.double,
+                    torch.float16, torch.half,
+                    torch.bfloat16,
+                    torch.cfloat,
+                    torch.cdouble]
+
 
         #Get a list of all the keys with no duplicates.
         allkeys = []
@@ -108,18 +151,23 @@ def generate_mixed_model(in_mix, path):
         
         for k in allkeys:
             if 'model' in k:
+                count = 0
                 total = 0
                 temptheta = 0
                 for i in range(0, len(models_to_mix)):
                     if k in theta[i]:
+                        if k in theta[0] and isFloatingType(theta[0][k]) != isFloatingType(theta[i][k]):
+                            continue
+                        count += 1
                         total += mix[i]
                         temptheta += mix[i] * theta[i][k]
 
-                assert total != 0, "Invalid total"
-                #assert math.isfinite(temptheta), "Non-finite temptheta"
+                if count > 0:
+                    assert total != 0, "Invalid total"
+                    #assert math.isfinite(temptheta), "Non-finite temptheta"
 
-                #Ensure that the sum of mixes for this key is 1.
-                theta[0][k] = temptheta / total
+                    #Ensure that the sum of mixes for this key is 1.
+                    theta[0][k] = temptheta / total
 
 
         mixed_model = models_to_mix[0]
@@ -177,11 +225,11 @@ def load_mixed_model(mix):
     global models
     global mixed_model
     global previous_mix
+    previous_mix = copy.deepcopy(mix)
     mixed_model_path = "mixed_model.ckpt"
     generate_mixed_model(mix, mixed_model_path)
     mixed_model = {"name": "mixed_model", "path": mixed_model_path}
     load_model(mixed_model)
-    previous_mix = mix
 
 
 #Add a new request
@@ -303,7 +351,7 @@ def cancel_all():
 
 #Get the BaseManager object that shares the state between the workers.
 def get_manager():
-    manager = BaseManager((url, int(port)), authkey=auth.encode('utf8'))
+    manager = BaseManager((url, port), authkey=auth)
     manager.register('get_info', get_info)
     manager.register('cancel', cancel)
     manager.register('cancel_all', cancel_all)
@@ -330,12 +378,9 @@ def process_queue():
     global models
     global previous_mix
 
-    os.chdir('stable-diffusion-webui/')
-
     load_model(models[0])
     print("Starting process queue")
     processing_id = 1
-
 
 
     #Helper function to add progress status to returned object
@@ -363,32 +408,24 @@ def process_queue():
                 #Only check ten times per second to avoid wasting CPU cycles.
                 time.sleep(0.1)
             else:
-                #TODO: Code review
-                #TODO: Merge latest from upstream
-                #TODO: Test on tablet
-                #TODO: Share (merge request for webui (+fork so that it's usable until then), API repo, plugin repo)
-
-
-                #TODO P2 (plugin): figure out dropdown. Maybe just radios? What triggers the UXP failure from the JS side?
-                #TODO P2 (plugin): more than one image
-                #TODO P2 (plugin): model changing/mixing
-                #TODO P2 (plugin): display image selector grid
-                #TODO P3 (plugin): expose relevant advanced settings
-                #TODO P3 (plugin): img2img UI
-                #TODO P3 (plugin): imgproc UI
+                #TODO P1 (plugin): better progress display
+                #TODO P2 (plugin): expose relevant advanced settings
+                #TODO P2 (plugin): img2img UI
+                #TODO P2 (plugin): imgproc UI
+                #TODO P3 (plugin): selection-based img2img 
+                #TODO P3 Merge latest from upstream
                 #TODO P4 (plugin): task-based grouping
                 #TODO P4 (plugin): proper mask layers? Alpha-based? needs experimentation
-                #TODO P4 (plugin): session and/or user key
-                #TODO P4 (plugin): selection-based img2img 
                 #TODO P5 (plugin): outpainting -- defered
                 #TODO P5 (plugin): inpainting -- deferred
                 #TODO P5 (plugin): blend layers -- deferred
                 #TODO P5 (plugin): "AI brush" -- deferred
 
+                #TODO: Code review
                 #TODO: Documentation
 
                 #TODO: Workflow 1: Request a generated image and insert it into image (almost done except for plugin, needs checkboxes, progress, etc.)
-                #TODO: Workflow 2: Makea selection (or layer, or visible) for img2img. Maybe also mask? Force mask layer or let it be specified separately?
+                #TODO: Workflow 2: Make a selection (or layer, or visible) for img2img. Maybe also mask? Force mask layer or let it be specified separately?
                 #TODO: Workflow 3: Upload selection (or layer, or visible) for image processing (GFPGAN, GoBIG, RealESRGAN, etc)
 
 
@@ -404,11 +441,11 @@ def process_queue():
                     #Call the relevant generation function.
                     def call_webui_impl(request, ji):
                         if request["type"] == "txt2img":
-                            request["retval"] = webui_modified.txt2img(**request["params"], job_info=ji, callback=add_status)
+                            request["retval"] = webui.txt2img(**request["params"], job_info=ji, callback=add_status)
                         elif request["type"] == "img2img":
-                            request["retval"] = webui_modified.img2img(**request["params"], job_info=ji, callback=add_status)
+                            request["retval"] = webui.img2img(**request["params"], job_info=ji, callback=add_status)
                         elif request["type"] == "imgproc":
-                            request["retval"] = webui_modified.imgproc(**request["params"], callback=add_status)
+                            request["retval"] = webui.imgproc(**request["params"], callback=add_status)
                         else:
                             request["success"] = False
                             print("ERROR: Unknown request type!")
@@ -459,12 +496,12 @@ def process_queue():
                         mix = request["model"]
                         try:
                             if mix != previous_mix or loaded_model is not None and loaded_model["name"] != "mixed_model":
+                                print(f'Mix: {mix}, Previous mix: {previous_mix}, Loaded model: {loaded_model}')
                                 print("Loading new mixed model")
                                 load_mixed_model(mix)
                         except:
                             msg = f'{{"error": "Invalid mix specified"}}'
                             print(msg)
-                        previous_mix = mix
                             
 
 

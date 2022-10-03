@@ -25,20 +25,19 @@ function run_job_queue {
     clean_up
 }
 
-#Set some default environment variables
-export API_ADMIN_KEY="admin"
-export API_URL="0.0.0.0"
-export API_PORT="5000"
-export JOBQUEUE_URL="127.0.0.1"
-export JOBQUEUE_PORT="37844"
-export JOBQUEUE_AUTH="this_is_insecure."
-
 #Start the manager
 trap clean_up SIGHUP SIGINT SIGTERM
 run_job_queue &
 export JOB_LOOP_PID=$!
 echo "JOB_LOOP_PID: ${JOB_LOOP_PID}"
 
+#Set some default environment variables
+API_ADMIN_KEY="admin"
+API_URL="0.0.0.0"
+API_PORT="5000"
+JOBQUEUE_URL="127.0.0.1"
+JOBQUEUE_PORT="37844"
+JOBQUEUE_AUTH="this_is_insecure."
 
 #Start the API server
 echo "Using API URL: ${API_URL}, port: ${API_PORT}"

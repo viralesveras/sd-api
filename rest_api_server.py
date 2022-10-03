@@ -13,7 +13,6 @@ import rest_api_job_queue
 
 from PIL import Image
 
-#Experimentally, it seems this is the highest permitted on my GPU.
 max_resolution = os.getenv("MAX_RESOLUTION", 720896)
 print(f"Using max resolution: {max_resolution}")
 
